@@ -1,4 +1,4 @@
-bind-to-tinydns 0.4                                  Daniel Erat <dan@erat.org>
+bind-to-tinydns 0.4.1                                Daniel Erat <dan@erat.org>
 ================================================================================
 
 
@@ -87,3 +87,7 @@ Version History / Changelog
 		unterminated double- or backslash-quoted strings, but
 		prints a warning.  Fixed a silly bug that would allow
 		specific out-of-zone data through.
+0.4.1 20030608	Fixed a stupid typo that prevented too-large TTLs in RRs
+		from being detected.  Changed str_to_uint() to behave
+		closer to the way that my other string-handling functions
+		behave.  Added size checks for time values in SOA RDATA.

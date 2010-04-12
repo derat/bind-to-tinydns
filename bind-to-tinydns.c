@@ -1,4 +1,4 @@
-/* bind-to-tinydns.c, version 0.4, 20030601
+/* bind-to-tinydns.c, version 0.4.1, 20030608
  * written by Daniel Erat <dan@erat.org> -- http://erat.org/ */
 
 #include <ctype.h>
@@ -267,49 +267,45 @@ int qualify_domain (string *dest, const char *name, const string *origin)
 
 /* str_to_uint: converts the given string into an unsigned integer.  if
  * allow_time_fmt is set, allows BIND time-format strings such as
- * "2w1d2h5m6s".  does not check for overflow.  returns the converted
- * number, and puts 0 into the integer pointed at by ret on success and 1
- * otherwise. */
-unsigned int str_to_uint (const char *string, int allow_time_fmt, int *ret)
+ * "2w1d2h5m6s".  does not check for overflow.  puts the converted number
+ * into dest, and returns 0 on success and 1 otherwise. */
+int str_to_uint (unsigned int *dest, const char *src, int allow_time_fmt)
 {
 	int in_time_fmt = 0, in_part = 0;
 	unsigned int total = 0, part = 0;
 
-	if (!string || *string == '\0') {
-		warning ("str_to_uint: NULL or empty string", -1);
-		*ret = 1;
-		return 0;
+	if (!src || *src == '\0') {
+		warning ("str_to_uint: NULL or empty src", -1);
+		return 1;
 	}
 
-	for (; *string != '\0'; string++) {
-		if (*string >= '0' && *string <= '9') {
+	for (; *src != '\0'; src++) {
+		if (*src >= '0' && *src <= '9') {
 			if (!in_part) in_part = 1;
 			part *= 10;
-			part += *string - '0';
+			part += *src - '0';
 		} else {
 			if (!allow_time_fmt || !in_part) {
 				/* don't print a warning here, since this
-				 * function is also used to test if strings
+				 * function is also used to test if srcs
 				 * are TTLs */
-				*ret = 1;
-				return 0;
+				return 1;
 			}
 			if (!in_time_fmt) in_time_fmt = 1;
 			/* we actually want to overflow here if necessary,
 			 * because BIND does too... */
-			if (*string == 'w' || *string == 'W') {
+			if (*src == 'w' || *src == 'W') {
 				total += part * 86400 * 7;
-			} else if (*string == 'd' || *string == 'D') {
+			} else if (*src == 'd' || *src == 'D') {
 				total += part * 86400;
-			} else if (*string == 'h' || *string == 'H') {
+			} else if (*src == 'h' || *src == 'H') {
 				total += part * 60 * 60;
-			} else if (*string == 'm' || *string == 'M') {
+			} else if (*src == 'm' || *src == 'M') {
 				total += part * 60;
-			} else if (*string == 's' || *string == 'S') {
+			} else if (*src == 's' || *src == 'S') {
 				total += part;
 			} else {
-				*ret = 1;
-				return 0;
+				return 1;
 			}
 			part = 0;
 			in_part = 0;
@@ -317,13 +313,12 @@ unsigned int str_to_uint (const char *string, int allow_time_fmt, int *ret)
 	}
 	if (in_time_fmt && in_part) {
 		warning ("str_to_uint: unfinished time string", -1);
-		*ret = 1;
-		return 0;
+		return 1;
 	}
 	if (!in_time_fmt) total = part;
 
-	*ret = 0;
-	return total;
+	*dest = total;
+	return 0;
 }
 
 /* sanitize_ip: takes the dotted-decimal ip address in src and turns it
@@ -595,7 +590,7 @@ void construct_gen_output (char *dest, char **parts, int *offsets,
 int handle_entry (int num_tokens, const char **token, string *cur_origin,
 		  const string *top_origin, int *ttl)
 {
-	int i, ret;
+	int i;
 
 	if (!num_tokens) return 0;
 
@@ -612,8 +607,7 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 		if (num_tokens != 2)
 			fatal ("$TTL directive has wrong number of arguments",
 			       start_line_num);
-		*ttl = str_to_uint (token[1], 1, &ret);
-		if (ret || *ttl > 2147483646)
+		if (str_to_uint (ttl, token[1], 1) || *ttl > 2147483646)
 			fatal ("invalid $TTL value", start_line_num);
 	/* $GENERATE */
 	} else if (!strcasecmp (token[0], "$GENERATE")) {
@@ -703,7 +697,7 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 	/* handle records */
 	} else {
 		int next;
-		unsigned int local_ttl, temp_ttl;
+		unsigned int local_ttl;
 		static string owner;
 		static int prev_owner = 0;
 		string rdomain;
@@ -742,23 +736,19 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 		 * token is.  whose brilliant idea was it to let
 		 * these two come in either order? */
 		next = 1;
-		temp_ttl = str_to_uint (token[1], 1, &ret);
-		if (!ret) {
+		if (!str_to_uint (&local_ttl, token[1], 1)) {
 			if (local_ttl > 2147483646)
 				fatal ("invalid TTL in RR", start_line_num);
-			local_ttl = temp_ttl;
 			if (!strcasecmp (token[2], "IN")) {
 				next = 3;
 			} else {
 				next = 2;
 			}
 		} else if (!strcasecmp (token[1], "IN")) {
-			temp_ttl = str_to_uint (token[2], 1, &ret);
-			if (!ret) {
+			if (!str_to_uint (&local_ttl, token[2], 1)) {
 				if (local_ttl > 2147483646)
 					fatal ("invalid TTL in RR",
 					       start_line_num);
-				local_ttl = temp_ttl;
 				next = 3;
 			} else {
 				next = 2;
@@ -785,21 +775,25 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 			if (qualify_domain (&rname, token[next+2], cur_origin))
 				fatal ("choked on RNAME in SOA RDATA",
 				       start_line_num);
-			serial = str_to_uint (token[next+3], 0, &ret);
-			if (ret) fatal ("invalid SERIAL in SOA RDATA",
-					start_line_num);
-			refresh = str_to_uint (token[next+4], 1, &ret);
-			if (ret) fatal ("invalid REFRESH in SOA RDATA",
-					start_line_num);
-			retry = str_to_uint (token[next+5], 1, &ret);
-			if (ret) fatal ("invalid RETRY in SOA RDATA",
-					start_line_num);
-			expire = str_to_uint (token[next+6], 1, &ret);
-			if (ret) fatal ("invalid EXPIRE in SOA RDATA",
-					start_line_num);
-			minimum = str_to_uint (token[next+7], 1, &ret);
-			if (ret) fatal ("invalid MINIMUM in SOA RDATA",
-					start_line_num);
+			if (str_to_uint (&serial, token[next+3], 0))
+				fatal ("invalid SERIAL in SOA RDATA",
+				       start_line_num);
+			if (str_to_uint (&refresh, token[next+4], 1) ||
+			    refresh > 2147483646)
+				fatal ("invalid REFRESH in SOA RDATA",
+				       start_line_num);
+			if (str_to_uint (&retry, token[next+5], 1) ||
+			    retry > 2147483646)
+				fatal ("invalid RETRY in SOA RDATA",
+				       start_line_num);
+			if (str_to_uint (&expire, token[next+6], 1) ||
+			    expire > 2147483646)
+				fatal ("invalid EXPIRE in SOA RDATA",
+				       start_line_num);
+			if (str_to_uint (&minimum, token[next+7], 1) ||
+			    minimum > 2147483646)
+				fatal ("invalid MINIMUM in SOA RDATA",
+				       start_line_num);
 			fprintf (file, "Z%s:%s:%s:%u:%u:%u:%u:%u\n",
 				 owner.text, rdomain.text, rname.text,
 				 serial, refresh, retry, expire, minimum);
@@ -820,8 +814,8 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 			if (num_tokens - next - 1 != 2)
 				fatal ("wrong number of tokens in MX RDATA",
 				       start_line_num);
-			priority = str_to_uint (token[next+1], 0, &ret);
-			if (ret || priority > 65535)
+			if (str_to_uint (&priority, token[next+1], 0) ||
+			    priority > 65535)
 				fatal ("invalid priority in MX RDATA",
 				       start_line_num);
 			if (qualify_domain (&rdomain, token[next+2],
@@ -884,16 +878,16 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 			if (num_tokens - next - 1 != 4)
 				fatal ("wrong number of tokens "
 				       "in SRV RDATA", start_line_num);
-			priority = str_to_uint (token[next+1], 0, &ret);
-			if (ret || priority > 65535)
+			if (str_to_uint (&priority, token[next+1], 0) ||
+			    priority > 65535)
 				fatal ("invalid priority in SRV RDATA",
 				       start_line_num);
-			weight = str_to_uint (token[next+2], 0, &ret);
-			if (ret || weight > 65535)
+			if (str_to_uint (&weight, token[next+2], 0) ||
+			    weight > 65535)
 				fatal ("invalid weight in SRV RDATA",
 				       start_line_num);
-			port = str_to_uint (token[next+3], 0, &ret);
-			if (ret || port > 65535)
+			if (str_to_uint (&port, token[next+3], 0) ||
+			    port > 65535)
 				fatal ("invalid port in SRV RDATA",
 				       start_line_num);
 			if (qualify_domain (&rdomain, token[next+4],
@@ -951,7 +945,7 @@ int main (int argc, char *argv[])
 	}
 
 	/* tokenize, parse, and emit each entry */
-	while ((num_tokens = tokenize (token)) >= 0)
+	while ((num_tokens = tokenize (token)) != -1)
 		handle_entry (num_tokens, (const char **) token,
 			      &cur_origin, &origin, &ttl);
 

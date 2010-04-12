@@ -1,4 +1,4 @@
-bind-to-tinydns 0.4.2                         Daniel Erat <dan-tinydns@erat.org>
+bind-to-tinydns 0.4.3                         Daniel Erat <dan-tinydns@erat.org>
 ================================================================================
 
 
@@ -99,3 +99,7 @@ Version History / Changelog
 		I also made the program a bit more lenient in other places
 		(RRs of unknown type are skipped with a warning message
 		instead of causing failure, for example).  Thanks Mariano!
+0.4.3 20050817  Ick, I can't believe that I wrote this ugly code. :(
+                Fixed a bug that Rein <o7rein@uninet.ee> ran into, where an
+                origin of "." resulted in all records being declared
+                out-of-zone.

@@ -1,0 +1,79 @@
+bind-to-tinydns 0.3                                  Daniel Erat <dan@erat.org>
+================================================================================
+
+
+What it does / Why it does it
+================================================================================
+This program attempts to convert a BIND 9 zone file into the
+tinydns-data format natively used by the tinydns component of Dan
+Bernstein's djbdns package (http://cr.yp.to/djbdns.html).  This can be
+useful if you need to periodically convert zones that are stored in
+BIND format to tinydns format and you don't have the willingness or
+the oodles of memory needed to run a copy of BIND from which you can
+slave the zones with axfr-get (think >100 MB DNSbl zones, for
+instance).  For one-time conversions, you should instead use the AXFR
+procedure described by Dan (http://cr.yp.to/djbdns/run-server-bind.html).
+
+
+Getting / Compiling
+================================================================================
+The newest version of this program is available from my homepage
+(http://erat.org/).  After downloading the source, extract it and run
+"make".  Copy bind-to-tinydns wherever you want after this (I would
+recommend /usr/local/bin).  Edit the Makefile and source or email me
+if it doesn't work. :)
+
+
+Usage
+================================================================================
+bind-to-tinydns is invoked in the following manner:
+
+  bind-to-tinydns <origin> <output file> <temp file>
+
+The BIND zone is read from STDIN.  To convert a BIND zone file named
+"input" containing the zone "example.com" to a tinydns-data file named
+"output", you would run:
+
+  bind-to-tinydns example.com output output.tmp <input
+
+If the conversion is successful, the program exits with a return value
+of 0.  Otherwise, it exits with a return value of 1 (after deleting
+the temporary file).
+
+
+Portability
+================================================================================
+I've only tested this program on Linux.  I imagine/hope that it will
+work on most UNIX systems.  Please let me know if it doesn't.
+
+
+Details
+================================================================================
+The zone file format described in RFC 1035, and by extension, the one
+used by BIND, is not parser-friendly.  Without making this program a
+bigger mess than it already is, I've tried to make it as close to BIND 9
+as possible in what it accepts and how it interprets data.  I am aware
+of the following differences:
+
+- Missing SOA records in zone files do not cause failure.
+- Missing NS records in zone files do not cause failure.
+- RRs that occur before $TTL directives and before any SOA records do
+  not cause failure or warnings (a default TTL of 86400, rather than
+  that of the MINIMUM value of the SOA's rdata, is used).
+- The parser does not reject or modify RRs for the same domain that
+  have different TTLs.
+- IN is the only supported record class.  Records in other classes
+  cause failure.
+- The only supported record types are SOA, NS, MX, A, CNAME, PTR, TXT,
+  and SRV.  Records of other types cause failure.
+- The only supported $ directives are $ORIGIN and $TTL.  Other
+  directives cause failure.
+
+If you find additional differences (or worse yet, input that makes
+the program crash or go into an infinite loop), please let me know so
+I can fix the problem.
+
+
+Version History
+================================================================================
+0.3    20030521   Initial release.

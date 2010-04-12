@@ -1,5 +1,5 @@
-/* bind-to-tinydns.c, version 0.4.1, 20030608
- * written by Daniel Erat <dan@erat.org> -- http://erat.org/ */
+/* bind-to-tinydns.c, version 0.4.2, 20040326
+ * written by Daniel Erat <dan-tinydns@erat.org> -- http://erat.org/ */
 
 #include <ctype.h>
 #include <errno.h>
@@ -548,8 +548,8 @@ void parse_gen_string (char *line, char **parts, int *offsets,
 					fatal ("parse error in $GENERATE "
 					       "(curly braces not closed "
 					       "after base)", start_line_num);
-PARSE_GEN_STRING_DONE:
 			}
+PARSE_GEN_STRING_DONE:
 			if (*(ptr+1) != '\0') {
 				if (*num_parts >= MAX_GEN_PARTS)
 					fatal ("$GENERATE directive has too "
@@ -604,11 +604,16 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 			       start_line_num);
 	/* $TTL */
 	} else if (!strcasecmp (token[0], "$TTL")) {
-		if (num_tokens != 2)
-			fatal ("$TTL directive has wrong number of arguments",
-			       start_line_num);
-		if (str_to_uint (ttl, token[1], 1) || *ttl > 2147483646)
-			fatal ("invalid $TTL value", start_line_num);
+		if (num_tokens != 2) {
+			warning ("$TTL directive has wrong number of arguments",
+			         start_line_num);
+			*ttl = DEFAULT_TTL;
+		} else if (str_to_uint (ttl, token[1], 1) ||
+			   *ttl > 2147483646) {
+			warning ("invalid $TTL value; using default instead",
+				 start_line_num);
+			*ttl = DEFAULT_TTL;
+		}
 	/* $GENERATE */
 	} else if (!strcasecmp (token[0], "$GENERATE")) {
 		int start, stop, step, found, num_lhs_parts, num_rhs_parts;
@@ -693,7 +698,7 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 		fatal ("sorry, $INCLUDE directive is not implemented",
 		       start_line_num);
 	} else if (token[0][0] == '$') {
-		fatal ("unknown $ directive", start_line_num);
+		warning ("ignoring unknown $ directive", start_line_num);
 	/* handle records */
 	} else {
 		int next;
@@ -737,8 +742,10 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 		 * these two come in either order? */
 		next = 1;
 		if (!str_to_uint (&local_ttl, token[1], 1)) {
-			if (local_ttl > 2147483646)
-				fatal ("invalid TTL in RR", start_line_num);
+			if (local_ttl > 2147483646) {
+				warning ("invalid TTL in RR", start_line_num);
+				local_ttl = *ttl;
+			}
 			if (!strcasecmp (token[2], "IN")) {
 				next = 3;
 			} else {
@@ -746,9 +753,11 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 			}
 		} else if (!strcasecmp (token[1], "IN")) {
 			if (!str_to_uint (&local_ttl, token[2], 1)) {
-				if (local_ttl > 2147483646)
-					fatal ("invalid TTL in RR",
-					       start_line_num);
+				if (local_ttl > 2147483646) {
+					warning ("invalid TTL in RR",
+					         start_line_num);
+					local_ttl = *ttl;
+				}
 				next = 3;
 			} else {
 				next = 2;
@@ -902,7 +911,7 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
 				 rdomain.text, local_ttl);
 		/* other */
 		} else {
-			fatal ("unknown RR type", start_line_num);
+			warning ("skipping unknown RR type", start_line_num);
 		}
 	}
 
@@ -918,8 +927,9 @@ int main (int argc, char *argv[])
 	unsigned int ttl = DEFAULT_TTL;
 
 	if (argc != 4) {
-		fprintf (stderr, "bind-to-tinydns: usage: bind-to-tinydns "
-			 "<origin> <output file> <temp file>\n");
+		fprintf (stderr, "  usage: bind-to-tinydns "
+			 "<origin/domain> <output file> <temp file>\n"
+			 "    (input is read from stdin)\n");
 		exit (1);
 	}
 

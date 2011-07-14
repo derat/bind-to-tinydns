@@ -588,7 +588,7 @@ void construct_gen_output (char *dest, char **parts, int *offsets,
 
 /* handle_entry: parses and handles the given entry. */
 int handle_entry (int num_tokens, const char **token, string *cur_origin,
-                  const string *top_origin, int *ttl) {
+                  const string *top_origin, unsigned int *ttl) {
     int i;
 
     if (!num_tokens) return 0;

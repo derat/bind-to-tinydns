@@ -1,6 +1,7 @@
 /* bind-to-tinydns.c, version 0.4.2, 20040326
  * written by Daniel Erat <dan-tinydns@erat.org> -- http://erat.org/ */
 
+#include <arpa/inet.h>
 #include <ctype.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -327,7 +328,6 @@ int str_to_uint (unsigned int *dest, const char *src, int allow_time_fmt)
  * with out-of-bounds octets are rejected.  returns 0 on success and 1
  * otherwise. */
 int sanitize_ip (char *dest, const char *src) {
-
     char *dot;
     int i, total;
 
@@ -853,6 +853,17 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
                        start_line_num);
             fprintf (file, "+%s:%s:%d\n", owner.text,
                  ip, local_ttl);
+        /* AAAA */
+        } else if (!strcasecmp (token[next], "AAAA")) {
+            unsigned char ipv6_bytes[16];
+            if (num_tokens - next - 1 != 1)
+                fatal ("wrong number of tokens in AAAA RDATA", start_line_num);
+            if (!inet_pton(AF_INET6, token[next+1], ipv6_bytes))
+                fatal ("invalid IPv6 address in AAAA RDATA", start_line_num);
+            fprintf (file, ":%s:28:", owner.text);
+            for (i = 0; i < 16; i++)
+                fprintf (file, "\\%03o", ipv6_bytes[i]);
+            fprintf (file, ":%d\n", local_ttl);
         /* CNAME */
         } else if (!strcasecmp (token[next], "CNAME")) {
             if (num_tokens - next - 1 != 1)

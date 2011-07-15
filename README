@@ -1,4 +1,4 @@
-bind-to-tinydns 0.4.3                         Daniel Erat <dan-tinydns@erat.org>
+bind-to-tinydns                               Daniel Erat <dan-tinydns@erat.org>
 ================================================================================
 
 
@@ -65,7 +65,8 @@ differences:
 - IN is the only supported record class.  Records in other classes are
   ignored.
 - The only supported record types are SOA, NS, MX, A, CNAME, PTR, TXT,
-  and SRV.  Records of other types are ignored.
+  SRV, and AAAA.  AAAA support is not well-tested.  Records of other types
+  are ignored.
 - The $INCLUDE directive is not supported, and causes failure.
 
 If you find additional differences (or worse yet, input that makes the
@@ -103,3 +104,6 @@ Version History / Changelog
                 Fixed a bug that Rein <o7rein@uninet.ee> ran into, where an
                 origin of "." resulted in all records being declared
                 out-of-zone.
+
+[For all subsequent changes, check the commit history at
+https://github.com/derat/bind-to-tinydns.]

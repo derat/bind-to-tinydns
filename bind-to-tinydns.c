@@ -351,6 +351,63 @@ int sanitize_ip (char *dest, const char *src) {
     return 0;
 }
 
+int append_octal_number (string *dest, unsigned int num)
+{
+    if (dest->real_len + 4 >= DOMAIN_STR_LEN) {
+        return 1;
+    }
+
+    sprintf (dest->text + dest->real_len, "\\%03o", num);
+    dest->len += 4;
+    dest->real_len += 4;
+    return 0;
+}
+
+int append_string (string *dest, const char *data, size_t len)
+{
+    if (len == 0) {
+        return 0;
+    }
+    if (dest->real_len + len >= DOMAIN_STR_LEN) {
+        return 1;
+    }
+
+    memcpy (dest->text + dest->real_len, data, len);
+    dest->len += len;
+    dest->real_len += len;
+    return 0;
+}
+
+/* octal_escape_hostname_labels: write a copy of src to dest with each dot
+ * replaced by the length of the following label. */
+int octal_escape_hostname_labels (string *dest, const char *src)
+{
+    string temp;
+    const char *label_start = src;
+    unsigned int label_len = 0;
+
+    for (temp.text[0] = '\0', temp.len = 0, temp.real_len = 0; *src; src++) {
+        if (*src == '.') {
+            label_len = src - label_start;
+            if (append_octal_number (&temp, label_len) != 0 ||
+                append_string (&temp, label_start, label_len) != 0) {
+                return 1;
+            }
+            label_start = src + 1;
+        }
+    }
+
+    label_len = src - label_start;
+    if (append_octal_number (&temp, label_len) != 0 ||
+        append_string (&temp, label_start, label_len) != 0) {
+        return 1;
+    }
+
+    temp.text[temp.real_len] = '\0';
+    memcpy (dest, &temp, sizeof (string));
+    return 0;
+}
+
 /* tokenize: tokenizes a line from stdin.  puts the tokens into the token
  * array and returns the number of tokens found, or -1 if the end of the
  * file was reached. */
@@ -924,11 +981,14 @@ int handle_entry (int num_tokens, const char **token, string *cur_origin,
                         cur_origin))
                 fatal ("choked on domain name in SRV "
                        "RDATA", start_line_num);
+            if (octal_escape_hostname_labels (&rdomain, rdomain.text)) {
+                fatal ("unable to escape hostname labels in SRV RDATA",
+                       start_line_num);
+            }
             fprintf (file, ":%s:33:\\%03o\\%03o"
-                 "\\%03o\\%03o\\%03o\\%03o\\%03o%s"
-                 ":%d\n", owner.text, priority / 256,
-                 priority % 256, weight / 256, weight % 256,
-                 port / 256, port % 256, rdomain.len,
+                 "\\%03o\\%03o\\%03o\\%03o%s:%d\n",
+                 owner.text, priority / 256, priority % 256,
+                 weight / 256, weight % 256, port / 256, port % 256,
                  rdomain.text, local_ttl);
         /* other */
         } else {

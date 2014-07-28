@@ -1,6 +1,13 @@
 bind-to-tinydns                               Daniel Erat <dan-tinydns@erat.org>
 ================================================================================
 
+An important note
+================================================================================
+I wrote this program more than ten years ago and don't trust its management of
+memory used to store strings. If you plan to use it to convert untrusted data, I
+strongly recommend that you use a different program or port this one to a
+language that has a built-in string type (Go would be a good choice).
+
 
 What it does / Why it does it
 ================================================================================
